@@ -1,47 +1,80 @@
 {
   "slug": "seal-maze",
   "kind": "extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "name": {
-    "zh": "seal-maze",
-    "en": "seal-maze"
+    "zh": "海豹回家",
+    "en": "Seal Home"
   },
   "boards": [
     "tikpal-r1"
   ],
   "layout": "yaykit-v1",
-  "minYay": "0.1.10",
+  "minYay": "0.1.13",
   "apiLevel": 3,
   "capabilities": {},
   "launch": {
     "summary": {
-      "zh": "计数器样板：短按加一，按住清零。",
-      "en": "Counter template: tap to count, hold to reset."
+      "zh": "倾斜 Tikpal Voice，引导海豹穿过迷宫回家。支持独玩与同一 Wi-Fi 下的浏览器大屏模式。",
+      "en": "Tilt Tikpal Voice to guide a seal home through a maze, solo or on a browser screen on the same Wi-Fi."
     },
     "examples": {
       "zh": [
-        "打开计数器",
-        "帮我数数"
+        "打开海豹回家",
+        "我想玩迷宫",
+        "来玩体感小游戏"
       ],
       "en": [
-        "Open the counter",
-        "Count for me"
+        "Open Seal Home",
+        "I want to play a maze",
+        "Play a tilt game"
       ]
     }
   },
   "aliases": {
     "zh": [
-      "计数器"
+      "海豹迷宫",
+      "体感迷宫"
     ],
     "en": [
-      "Counter"
+      "Seal Maze",
+      "Tilt Maze"
     ]
   },
   "scenes": [
-    "tools"
+    "relax"
   ],
   "audience": "all",
   "pricing": {
     "kind": "free"
+  },
+  "voiceCode": {
+    "number": 262,
+    "ask": {
+      "zh": [
+        "海豹回家怎么玩？"
+      ],
+      "en": [
+        "How do I play Seal Home?"
+      ]
+    }
+  },
+  "permissions": {
+    "device": [
+      "speaker",
+      "motion"
+    ]
+  },
+  "ageRating": "4+",
+  "privacy": {
+    "collects": [
+      {
+        "data": "usage",
+        "why": {
+          "zh": "记录游戏次数、通关次数和最快用时，用于游戏总结；大屏模式在局域网传输游戏状态。",
+          "en": "Keep games, wins and best time for a session summary; big-screen mode sends game state on the local network."
+        }
+      }
+    ]
   }
 }

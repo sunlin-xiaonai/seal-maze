@@ -4,3 +4,6 @@ managed_components/
 sdkconfig
 sdkconfig.old
 .DS_Store
+
+*.tikpal
+ai-selfreview.json
