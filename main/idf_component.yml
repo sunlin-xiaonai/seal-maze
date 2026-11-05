@@ -1,0 +1,3 @@
+dependencies:
+  # maze.local: the big screen's address without typing the board's IP.
+  espressif/mdns: "^1.4.0"

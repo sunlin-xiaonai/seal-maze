@@ -7,7 +7,10 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_MALLOC=y
-CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
+# Network app (app guide 8): only allocations under 4 KB stay internal; the Wi-Fi/lwIP buffers go to PSRAM.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 # Extension firmware run in a slot of the yaykit-v1 layout, with app rollback.
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../partitions/yaykit-v1.csv"
@@ -44,3 +47,11 @@ CONFIG_LV_USE_QRCODE=y
 CONFIG_SPIRAM_MEMTEST=n
 # Development commands (yay tap|double|hold|say|launch); turn off for a release.
 CONFIG_YAY_DEV=y
+# The big screen: the page and its WebSocket served by the board (web.c).
+CONFIG_HTTPD_WS_SUPPORT=y
+# Wi-Fi for a small page and ~30 short messages a second: fewer static RX buffers (internal DMA RAM) and no IRAM
+# speed-ups (IRAM and the internal heap share the S3's SRAM), as City Radio.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=10
+CONFIG_ESP_WIFI_RX_BA_WIN=8
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n

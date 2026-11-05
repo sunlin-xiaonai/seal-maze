@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>海豹回家</title>
+<style>
+  :root {
+    --paper: #171C19; --panel: #30372F; --ink: #FAF7EF; --ink2: #A5AA9E; --ink3: #737A70;
+    --amber: #E3A857; --amber-edge: #A47A3F; --coral: #DF795D; --sage: #9FB38C; --cream: #F3E6C8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; overflow: hidden; }
+  main { height: 100%; display: flex; align-items: center; justify-content: center; gap: 5vw; padding: 4vh 4vw; }
+  #stage { position: relative; height: 100%; display: flex; align-items: center; }
+  canvas { display: block; border-radius: 14px; box-shadow: 0 0 0 8px #241f18; }
+  aside { flex: 0 0 min(380px, 30vw); display: flex; flex-direction: column; gap: 4vh; }
+  .level { font-size: 18px; color: var(--ink2); }
+  .time { font-size: clamp(56px, 8vw, 104px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+  .best { font-size: 16px; color: var(--ink2); margin-top: 6px; }
+  .seals-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+  .seals { display: flex; gap: 12px; }
+  .seal { width: 46px; height: 40px; border-radius: 50% 50% 45% 45%; border: 2px dashed var(--ink3); position: relative; transition: transform .2s; }
+  .seal.got { background: var(--cream); border: 3px solid var(--sage); }
+  .seal.pop { animation: pop .5s ease-out; }
+  @keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.45); } 100% { transform: scale(1); } }
+  .seal.got::before, .seal.got::after { content: ""; position: absolute; top: 12px; width: 5px; height: 5px; border-radius: 50%; background: var(--paper); }
+  .seal.got::before { left: 11px; } .seal.got::after { right: 11px; }
+  .tilt { display: flex; align-items: center; gap: 18px; color: var(--ink2); font-size: 16px; }
+  .bubble { position: relative; width: 92px; height: 92px; border-radius: 50%; border: 3px solid var(--ink3); flex: none; }
+  .bubble::before { content: ""; position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px; border-radius: 50%; border: 2px dashed var(--ink3); }
+  .bubble i { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; margin: -12px; border-radius: 50%; background: var(--sage); }
+  .keys { border-top: 1px solid var(--panel); padding-top: 18px; display: grid; grid-template-columns: 96px 1fr; row-gap: 8px; font-size: 16px; color: var(--ink2); }
+  .keys b { color: var(--ink); }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: rgba(23, 28, 25, 0.78); border-radius: 14px; text-align: center; padding: 24px; }
+  #overlay[hidden] { display: none; }
+  #overlay h1 { margin: 0; font-size: clamp(36px, 5vw, 64px); }
+  #overlay p { margin: 0; font-size: 20px; color: var(--ink2); line-height: 1.6; }
+  #overlay .big { font-size: clamp(80px, 12vw, 160px); font-weight: 700; color: var(--coral); line-height: 1; }
+  #toast { position: absolute; left: 50%; top: 10%; transform: translate(-50%, -10px); opacity: 0; pointer-events: none;
+    padding: 12px 22px; border-radius: 999px; font-size: clamp(20px, 2.4vw, 30px); font-weight: 700; white-space: nowrap;
+    background: var(--paper); box-shadow: 0 0 0 3px currentColor; transition: opacity .25s, transform .25s; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  @media (max-width: 760px) { main { flex-direction: column; } aside { flex: none; width: 100%; } #stage { height: 62%; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="stage">
+    <canvas id="maze" aria-label="迷宫" role="img"></canvas>
+    <div id="toast" role="status"></div>
+    <div id="overlay"><h1 id="o-title">海豹回家</h1><p id="o-text">正在连接板子…</p></div>
+  </div>
+  <aside>
+    <div><div class="level" id="level">第 1 关</div><div class="time" id="time">0:00</div><div class="best" id="best"></div></div>
+    <div><div class="seals-title" id="seals-title">海豹朋友 0 / 5</div><div class="seals" id="seals"></div></div>
+    <div class="tilt"><div class="bubble"><i id="bubble"></i></div><div id="tilt-text">板子往哪边斜，<br>小海豹就往哪边滚</div></div>
+    <div class="keys" id="keys"></div>
+  </aside>
+</main>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const canvas = $("maze"), ctx = canvas.getContext("2d");
+const css = getComputedStyle(document.documentElement);
+const COLORS = {};
+for (const n of ["paper", "panel", "ink", "ink2", "ink3", "amber", "amber-edge", "coral", "sage", "cream"]) COLORS[n] = css.getPropertyValue("--" + n).trim();
+const C = (n) => COLORS[n];
+const layer = document.createElement("canvas"), lctx = layer.getContext("2d");  // the walls, drawn once
+let layerOpen = null;
+const EV = { WALL: 1, ROCK: 2, SEAL: 4, LOCKED: 8, WIN: 16 };
+// How far (ms) the playback runs behind the board: the recent lateness of messages, so a phone's jumpier Wi-Fi
+// gets a little more slack and a good link stays quick.
+let delay = 90, lates = [];
+let level = null, cell = 32, lang = "zh";
+let st = { st: "wait", x: 0, y: 0, got: 0, ms: 0, b: 0, tx: 0, ty: 0, n: 0, best: 0, solo: false };
+let snaps = [], offset = null;  // the ball's recent positions by the board's clock; board clock - page clock
+let shown = { x: 0, y: 0 }, trail = [], sparks = [], shake = 0, rockFlash = {}, openPulse = 0, lockFlash = 0;
+
+const T = {
+  zh: { title: "海豹回家", level: (n) => "第 1 关 · " + n, seals: (a, b) => `海豹朋友 ${a} / ${b}`, best: (t) => "最好 " + t,
+        connecting: "正在连接板子…", wait: "在板子上点「开始」", waitSub: "用你觉得舒服的姿势拿好板子", count: "拿好别动",
+        pause: "暂停了", pauseSub: "把板子翻回来继续", won: "到家啦！", wonSub: (t, b) => `用时 ${t} · 撞石头 ${b} 次`,
+        solo: "在圆屏上玩", soloSub: "回板子菜单选「连大屏」，这里就能看", lost: "和板子断开了，正在重连…",
+        seal: (a, b) => `找到 ${a} / ${b} 只！`, open: "出口开了，快回家！", locked: (n) => `还差 ${n} 只海豹`, rock: "哎哟，石头！",
+        keys: [["倾斜", "滚动小海豹"], ["摇一摇", "回起点重来"], ["扣过来", "暂停"], ["收齐 5 只", "出口才会打开"]] },
+  en: { title: "Seal Home", level: (n) => "Level 1 · " + n, seals: (a, b) => `Seal friends ${a} / ${b}`, best: (t) => "Best " + t,
+        connecting: "Connecting to the board…", wait: "Tap Start on the board", waitSub: "Hold it any way that feels comfortable", count: "Hold still",
+        pause: "Paused", pauseSub: "Turn the board back over", won: "Home!", wonSub: (t, b) => `${t} · ${b} rock bumps`,
+        solo: "Playing on the round screen", soloSub: "Pick Big screen on the board to play here", lost: "Lost the board, reconnecting…",
+        seal: (a, b) => `Found ${a} / ${b}!`, open: "The exit is open, go home!", locked: (n) => `${n} more seal${n > 1 ? "s" : ""} to find`, rock: "Ouch, a rock!",
+        keys: [["Tilt", "roll the seal"], ["Shake", "start over"], ["Face down", "pause"], ["All 5 seals", "open the exit"]] },
+};
+const t = () => T[lang] || T.zh;
+
+function fmt(ms) { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function popcount(v) { let n = 0; while (v) { v &= v - 1; n++; } return n; }
+
+function layout() {
+  if (!level) return;
+  const stage = $("stage").getBoundingClientRect();
+  const maxW = window.innerWidth * (window.innerWidth > 760 ? 0.56 : 0.92);
+  cell = Math.max(8, Math.floor(Math.min(stage.height / level.h, maxW / level.w)));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);  // a phone's 3x is three times the pixels for nothing
+  for (const c of [canvas, layer]) { c.width = level.w * cell * dpr; c.height = level.h * cell * dpr; }
+  canvas.style.width = level.w * cell + "px"; canvas.style.height = level.h * cell + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layerOpen = null;
+}
+
+/** The walls and labels into the layer: again only when the size changes or the exit opens. */
+function drawLayer(open) {
+  const W = level.w * cell, H = level.h * cell, x = lctx;
+  x.fillStyle = C("panel"); x.fillRect(0, 0, W, H);
+  const e = Math.max(2, cell * 0.05);
+  for (let r = 0; r < level.h; r++) for (let c = 0; c < level.w; c++) {
+    if (!wall(r, c)) continue;
+    const px = c * cell, py = r * cell;
+    x.fillStyle = C("amber-edge"); x.fillRect(px, py, cell, cell);
+    const l = !wall(r, c - 1) ? e : 0, rt = !wall(r, c + 1) ? e : 0, u = !wall(r - 1, c) ? e : 0, d = !wall(r + 1, c) ? e : 0;
+    x.fillStyle = C("amber"); x.fillRect(px + l, py + u, cell - l - rt, cell - u - d);
+  }
+  const [er, ec] = level.exit;
+  x.fillStyle = C("ink2"); x.font = `700 ${Math.max(10, cell * 0.3)}px sans-serif`; x.textBaseline = "middle";
+  x.fillText(lang === "zh" ? "出口" : "Exit", ec * cell + cell * 0.18, er * cell + cell * 0.5);
+  x.fillText(lang === "zh" ? "起点" : "Start", level.start[1] * cell + cell * 0.18, level.start[0] * cell + cell * 0.5);
+  layerOpen = open;
+}
+
+function wall(r, c) { return r < 0 || c < 0 || r >= level.h || c >= level.w || level.rows[r][c] === "#"; }
+
+let toastTimer = 0;
+function toast(text, color) {
+  const el = $("toast");
+  el.textContent = text; el.style.color = color; el.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove("on"), 1600);
+}
+
+function burst(x, y, n, speed, life, colors) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = speed * (0.4 + 0.6 * Math.random()), l = life * (0.7 + 0.3 * Math.random());
+    sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: l, max: l, color: colors[i % colors.length] });
+  }
+}
+
+/** What the board says just happened: the same effects as on the round screen, and a word about it. */
+function onEvents(m) {
+  const ev = m.ev || 0, tt = t(), n = level.seals.length, got = popcount(m.got);
+  if (ev & EV.WALL) shake = Math.max(shake, 5);
+  if ((ev & EV.ROCK) && m.lr >= 0) {
+    shake = Math.max(shake, 10); rockFlash[m.lr] = 0.3;
+    const [x, y] = level.rocks[m.lr]; burst(x, y, 8, 3.5, 0.35, [C("ink2"), C("cream")]);
+    toast(tt.rock, C("ink2"));
+  }
+  if ((ev & EV.SEAL) && m.ls >= 0) {
+    const [x, y] = level.seals[m.ls]; burst(x, y, 22, 5, 0.8, [C("cream"), C("sage")]);
+    const el = $("seals").children[got - 1]; if (el) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+    if (got === n) { openPulse = 1.6; burst(level.exit[1] + 0.5, level.exit[0] + 0.5, 30, 4, 1.3, [C("sage"), C("cream")]); toast(tt.open, C("sage")); }
+    else toast(tt.seal(got, n), C("cream"));
+  }
+  if (ev & EV.LOCKED) { lockFlash = 0.6; shake = Math.max(shake, 4); toast(tt.locked(n - got), C("coral")); }
+  if (ev & EV.WIN) burst(m.x, m.y, 50, 6, 1.4, [C("cream"), C("sage"), C("amber")]);
+}
+
+function drawSeal(x, y, s) {
+  ctx.fillStyle = C("paper"); ctx.beginPath(); ctx.ellipse(x + 2, y + 3, s, s * 0.85, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = C("cream"); ctx.beginPath(); ctx.ellipse(x, y, s, s * 0.85, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = C("paper");
+  for (const dx of [-0.38, 0.38]) { ctx.beginPath(); ctx.arc(x + dx * s, y - 0.2 * s, Math.max(1.5, s * 0.12), 0, 7); ctx.fill(); }
+  ctx.beginPath(); ctx.ellipse(x, y + 0.15 * s, s * 0.16, s * 0.11, 0, 0, 7); ctx.fill();
+}
+
+function draw(now, dt) {
+  if (!level) return;
+  const W = level.w * cell, H = level.h * cell, open = popcount(st.got) === level.seals.length;
+  ctx.save();
+  if (shake > 0.3) { ctx.translate((Math.random() - 0.5) * 2 * shake, (Math.random() - 0.5) * 2 * shake); shake *= Math.exp(-dt * 16); } else shake = 0;
+  if (layerOpen !== open) drawLayer(open);
+  ctx.fillStyle = C("paper"); ctx.fillRect(-20, -20, W + 40, H + 40);
+  ctx.drawImage(layer, 0, 0, W, H);
+  const [er, ec] = level.exit;
+  const gate = Math.max(4, cell * (lockFlash > 0 ? 0.22 : 0.12));
+  if (!open) {
+    ctx.fillStyle = C("coral");
+    if (ec === 0) ctx.fillRect(0, er * cell, gate, cell);
+    else if (ec === level.w - 1) ctx.fillRect(W - gate, er * cell, gate, cell);
+    else if (er === 0) ctx.fillRect(ec * cell, 0, cell, gate);
+    else ctx.fillRect(ec * cell, H - gate, cell, gate);
+  } else if (openPulse > 0) {
+    ctx.fillStyle = `rgba(159,179,140,${0.35 + 0.35 * Math.sin(openPulse * 14)})`;
+    ctx.fillRect(ec * cell, er * cell, cell, cell);
+  }
+  ctx.fillStyle = "rgba(159,179,140,0.55)";
+  for (const p of trail) { ctx.beginPath(); ctx.arc(p[0] * cell, p[1] * cell, cell * 0.07, 0, 7); ctx.fill(); }
+  level.rocks.forEach(([x, y], i) => {
+    const hit = (rockFlash[i] || 0) > 0, r = cell * 0.22 * (hit ? 1.15 : 1);
+    ctx.fillStyle = C("paper"); ctx.beginPath(); ctx.arc(x * cell + 2, y * cell + 3, r, 0, 7); ctx.fill();
+    ctx.fillStyle = hit ? C("cream") : C("ink3"); ctx.beginPath(); ctx.arc(x * cell, y * cell, r, 0, 7); ctx.fill();
+    if (!hit) { ctx.fillStyle = C("ink2"); ctx.beginPath(); ctx.arc(x * cell - r * 0.3, y * cell - r * 0.3, r * 0.35, 0, 7); ctx.fill(); }
+  });
+  level.seals.forEach(([x, y], i) => {
+    if (!(st.got & (1 << i))) drawSeal(x * cell, (y + Math.sin(now / 310 + i * 1.7) * 0.04) * cell, cell * 0.3);
+  });
+  const bx = shown.x * cell, by = shown.y * cell, br = cell * 0.3;
+  ctx.fillStyle = C("paper"); ctx.beginPath(); ctx.arc(bx + 3, by + 4, br, 0, 7); ctx.fill();
+  ctx.fillStyle = C("ink"); ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fill();
+  ctx.fillStyle = C("paper");
+  for (const dx of [-0.38, 0.38]) { ctx.beginPath(); ctx.arc(bx + dx * br, by - 0.18 * br, br * 0.13, 0, 7); ctx.fill(); }
+  ctx.beginPath(); ctx.ellipse(bx, by + 0.2 * br, br * 0.18, br * 0.12, 0, 0, 7); ctx.fill();
+  sparks = sparks.filter((s) => (s.life -= dt) > 0);
+  for (const s of sparks) {
+    s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= Math.exp(-dt * 3); s.vy *= Math.exp(-dt * 3);
+    ctx.fillStyle = s.color; ctx.globalAlpha = Math.min(1, s.life / s.max * 1.5);
+    ctx.beginPath(); ctx.arc(s.x * cell, s.y * cell, Math.max(2, cell * 0.13 * (s.life / s.max) + 1.5), 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  for (const k in rockFlash) rockFlash[k] -= dt;
+  openPulse = Math.max(0, openPulse - dt); lockFlash = Math.max(0, lockFlash - dt);
+}
+
+function panel() {
+  if (!level) return;
+  $("level").textContent = t().level(level.name);
+  $("time").textContent = fmt(st.ms);
+  $("best").textContent = st.best ? t().best(fmt(st.best)) : "";
+  const got = popcount(st.got);
+  $("seals-title").textContent = t().seals(got, level.seals.length);
+  const box = $("seals");
+  if (box.children.length !== level.seals.length) box.innerHTML = level.seals.map(() => '<div class="seal"></div>').join("");
+  [...box.children].forEach((el, i) => el.classList.toggle("got", i < got));
+  const k = 70;
+  $("bubble").style.transform = `translate(${Math.max(-34, Math.min(34, st.tx * k))}px, ${Math.max(-34, Math.min(34, st.ty * k))}px)`;
+}
+
+function overlay() {
+  const o = $("overlay"), tt = t();
+  let title = "", text = "", big = false;
+  if (!sock || sock.readyState !== 1) title = tt.title, text = level ? tt.lost : tt.connecting;
+  else if (st.solo) title = tt.solo, text = tt.soloSub;
+  else if (st.st === "wait") title = tt.wait, text = tt.waitSub;
+  else if (st.st === "count") title = String(st.n || ""), text = tt.count, big = true;
+  else if (st.st === "pause") title = tt.pause, text = tt.pauseSub;
+  else if (st.st === "won") title = tt.won, text = tt.wonSub(fmt(st.ms), st.b);
+  o.hidden = !title;
+  $("o-title").textContent = title;
+  $("o-title").className = big ? "big" : "";
+  $("o-text").textContent = text;
+}
+
+/** Where the ball was `delay` ms ago by the board's clock: between the two states around then, or carried on from
+ *  the last one (by its speed, for at most 120 ms) when the next is late. */
+function playback(now) {
+  if (!snaps.length || offset === null) return null;
+  const at = now + offset - delay;
+  let i = snaps.length - 1;
+  while (i > 0 && snaps[i - 1].at > at) i--;
+  const b = snaps[i];
+  if (at >= b.at) {
+    const dt = Math.min(at - b.at, 120) / 1000;
+    return { x: b.x + b.vx * dt, y: b.y + b.vy * dt };
+  }
+  const a = snaps[i - 1];
+  if (!a) return { x: b.x, y: b.y };
+  const k = (at - a.at) / (b.at - a.at);
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+}
+
+let lastFrame = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  const p = st.st === "play" ? playback(now) : null;
+  if (p) shown = p; else shown = { x: st.x, y: st.y };
+  draw(now, dt);
+  requestAnimationFrame(frame);
+}
+
+let sock = null;
+function connect() {
+  sock = new WebSocket(`ws://${location.host}/ws`);
+  sock.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.t === "level") {
+      level = m; lang = m.lang === "en" ? "en" : "zh"; document.documentElement.lang = lang === "en" ? "en" : "zh-CN";
+      document.title = t().title;
+      $("keys").innerHTML = t().keys.map(([a, b]) => `<b>${a}</b><span>${b}</span>`).join("");
+      layout(); trail = [];
+    } else if (m.t === "s") {
+      if (!level) return;
+      const now = performance.now();
+      // The board's clock against ours: the largest difference seen is the message with the least delay in it.
+      // It sinks slowly so a slower link is followed; a jump (a reboot) starts over.
+      const off = m.at - now;
+      offset = offset === null || Math.abs(off - offset) > 2000 ? off : Math.max(off, offset - 0.05);
+      lates.push(offset - off);  // how much later than the quickest this one came
+      if (lates.length > 120) lates.shift();
+      const sorted = [...lates].sort((a, b) => a - b);
+      delay = Math.min(300, Math.max(60, sorted[Math.floor(sorted.length * 0.95)] + 30));
+      if (m.ms < st.ms || (m.st === "play" && st.st !== "play" && m.ms < 500)) { trail = []; snaps = []; }  // a new start
+      snaps.push({ at: m.at, x: m.x, y: m.y, vx: m.vx || 0, vy: m.vy || 0 });
+      if (snaps.length > 60) snaps.shift();
+      if (m.ev) onEvents(m);
+      st = m;
+      const last = trail[trail.length - 1];
+      if (st.st === "play" && (!last || Math.hypot(last[0] - st.x, last[1] - st.y) > 0.5)) trail.push([st.x, st.y]);
+      if (trail.length > 400) trail.shift();
+      panel();
+    }
+    overlay();
+  };
+  sock.onclose = () => { overlay(); setTimeout(connect, 1500); };
+  sock.onopen = () => { sock.send(JSON.stringify({ t: "level" })); overlay(); };
+}
+
+window.addEventListener("resize", () => { layout(); });
+overlay();
+connect();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
