@@ -821,7 +821,7 @@ void app_main(void) {
         s_english = yk_account_english();
     // 5. Launch parameters: none taken in this version.
     yk_launch_t launch;
-    if (yk_app_launch(&launch) == ESP_OK && launch.present) printf("SEAL_MAZE_LAUNCH intent=%s params=%s\n", launch.intent, launch.params);
+    (void)yk_app_launch(&launch);
 
     // 6. The screen; then confirm the image.
     board_lock(-1);
