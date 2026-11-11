@@ -1,7 +1,7 @@
 {
   "slug": "seal-maze",
   "kind": "extension",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "name": {
     "zh": "海豹回家",
     "en": "Seal Home"
@@ -71,8 +71,10 @@
       {
         "data": "usage",
         "why": {
-          "zh": "记录游戏次数、通关次数和最快用时，用于游戏总结；大屏模式在局域网传输游戏状态。",
-          "en": "Keep games, wins and best time for a session summary; big-screen mode sends game state on the local network."
+          "zh": "尝试将游戏次数、通关次数和最快用时保存到玩家的 Tikpal 账号；大屏模式在同一局域网传输游戏状态。",
+          "en": "Attempt to save games played, wins and best time to the player’s Tikpal account; big-screen mode sends game state on the local network.",
+          "ja": "プレイ回数、クリア回数、最短時間をプレイヤーの Tikpal アカウントに保存することを試みます。大画面モードでは同じローカルネットワーク内でゲームの状態を送信します。",
+          "es-419": "Se intenta guardar las partidas, victorias y el mejor tiempo en la cuenta de Tikpal del jugador; el modo de pantalla grande transmite el estado del juego en la red local."
         }
       }
     ]
